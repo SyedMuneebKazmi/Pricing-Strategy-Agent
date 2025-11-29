@@ -1,0 +1,9 @@
+# ignore local build artifacts / dev-only files
+.next
+node_modules
+.vscode
+*.log
+tmp_deps
+models
+data
+.DS_Store

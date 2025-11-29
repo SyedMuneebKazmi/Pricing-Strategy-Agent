@@ -1,8 +1,5 @@
 fastapi
 uvicorn[standard]
-pandas
-numpy
-scikit-learn
 joblib
 pydantic
 pytest
@@ -10,4 +7,5 @@ python-dotenv
 flask
 matplotlib
 seaborn
-gunicorn==21.2.0
+gunicorn
+scikit-learn
