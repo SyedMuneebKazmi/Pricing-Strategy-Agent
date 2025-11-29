@@ -3,9 +3,8 @@ import joblib
 import os
 import sys
 from pathlib import Path
-import pandas as pd
-import numpy as np
 import re
+import csv
 
 # Add the current directory to Python path
 current_dir = Path(__file__).parent
@@ -25,11 +24,6 @@ class ProductionConfig:
 
 app = Flask(__name__)
 app.config.from_object(ProductionConfig)
-
-# Global variables
-model = None
-data_processor = None
-pricing_agent = None
 
 def clean_number_input(value):
     """Clean and convert number inputs safely"""
@@ -55,26 +49,42 @@ class SimplePricingAgent:
             min_margin = input_data.get('min_margin', 20) / 100.0
             max_price = input_data.get('max_price', cost_price * 2.5)
             
-            # Pricing logic
-            base_price = (cost_price + competitor_price) / 2
-            demand_multiplier = {'Low': 0.9, 'Medium': 1.0, 'High': 1.1}
+            print(f"Processing: cost=${cost_price}, competitor=${competitor_price}")
+            
+            # Smart pricing logic
+            base_price = (cost_price * 0.4 + competitor_price * 0.6)
+            
+            # Adjust based on demand and seasonality
+            demand_multiplier = {'Low': 0.85, 'Medium': 1.0, 'High': 1.15}
             seasonality_multiplier = {'Low': 0.9, 'Normal': 1.0, 'Peak': 1.1}
             
             adjusted_price = base_price * demand_multiplier[demand_level] * seasonality_multiplier[seasonality]
             
-            # Apply constraints
+            # Apply business constraints
             min_price = cost_price * (1 + min_margin)
             constrained_price = max(min_price, min(max_price, adjusted_price))
             
-            # Calculate metrics
-            predicted_units = 150
+            # Calculate business metrics
+            base_demand = 100
+            demand_factor = {'Low': 0.7, 'Medium': 1.0, 'High': 1.3}
+            predicted_units = int(base_demand * demand_factor[demand_level])
+            
             profit_per_unit = constrained_price - cost_price
             total_profit = profit_per_unit * predicted_units
             profit_margin = (profit_per_unit / constrained_price) * 100
             
+            # Calculate confidence based on input quality
+            confidence = 0.8
+            if competitor_price > cost_price * 1.5:
+                confidence += 0.1
+            if min_margin <= 0.3:  # Reasonable margin
+                confidence += 0.05
+            
+            confidence = min(0.95, confidence)
+            
             return {
                 'recommended_price': round(constrained_price, 2),
-                'confidence_score': 0.85,
+                'confidence_score': round(confidence, 2),
                 'predicted_units_sold': predicted_units,
                 'status_code': 'SUCCESS',
                 'business_metrics': {
@@ -85,7 +95,7 @@ class SimplePricingAgent:
                 'constraints_applied': {
                     'min_price': round(min_price, 2),
                     'max_price': round(max_price, 2),
-                    'min_margin': min_margin * 100
+                    'min_margin': round(min_margin * 100, 1)
                 },
                 'input_data': input_data
             }
@@ -138,6 +148,12 @@ def recommend_price():
                 'status_code': 'ERROR_VALIDATION'
             }), 400
         
+        if input_data['min_margin'] < 0:
+            return jsonify({
+                'error': 'Minimum margin cannot be negative',
+                'status_code': 'ERROR_VALIDATION'
+            }), 400
+        
         # Set defaults
         if input_data['max_price'] == 0:
             input_data['max_price'] = input_data['cost_price'] * 2.5
@@ -146,7 +162,6 @@ def recommend_price():
         
         # Get recommendation
         recommendation = pricing_agent.find_optimal_price(input_data)
-        recommendation['input_data'] = input_data
         
         return jsonify(recommendation)
         
@@ -164,8 +179,9 @@ def about():
 def health_check():
     return jsonify({
         'status': 'healthy',
-        'agent_type': 'simple',
-        'version': '1.0.0'
+        'agent_type': 'advanced',
+        'version': '2.0.0',
+        'features': ['smart_pricing', 'demand_analysis', 'profit_optimization']
     })
 
 @app.route('/api/features')
@@ -180,9 +196,49 @@ def feature_info():
             {'value': 'Low', 'description': 'Off-season or low season'},
             {'value': 'Normal', 'description': 'Regular season'},
             {'value': 'Peak', 'description': 'High season or peak period'}
-        ]
+        ],
+        'pricing_strategy': 'AI-powered optimization with business constraints'
     }
     return jsonify(features_info)
+
+@app.route('/examples')
+def examples():
+    """Provide example inputs"""
+    examples_data = {
+        'example_scenarios': [
+            {
+                'name': 'Electronics Product',
+                'inputs': {
+                    'cost_price': 25.00,
+                    'competitor_price': 45.00,
+                    'demand_level': 'Medium',
+                    'seasonality': 'Normal',
+                    'min_margin': 20
+                }
+            },
+            {
+                'name': 'High-End Fashion',
+                'inputs': {
+                    'cost_price': 50.00,
+                    'competitor_price': 120.00,
+                    'demand_level': 'High',
+                    'seasonality': 'Peak',
+                    'min_margin': 40
+                }
+            },
+            {
+                'name': 'Basic Commodity',
+                'inputs': {
+                    'cost_price': 5.00,
+                    'competitor_price': 8.99,
+                    'demand_level': 'Low',
+                    'seasonality': 'Normal',
+                    'min_margin': 15
+                }
+            }
+        ]
+    }
+    return jsonify(examples_data)
 
 if __name__ == '__main__':
     app.run(debug=False)

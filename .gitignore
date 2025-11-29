@@ -1,14 +1,14 @@
-# Python
 __pycache__/
 *.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
 .venv/
 .env
-
-# Data & models
-data/
-src/models/
+.vercel
 *.pkl
 *.joblib
-
-# Jupyter
-.ipynb_checkpoints/
+models/
+large_data/
