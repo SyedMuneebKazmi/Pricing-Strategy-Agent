@@ -7,3 +7,9 @@ tmp_deps
 models
 data
 .DS_Store
+.venv
+__pycache__
+*.pyc
+notebooks
+scripts
+docs

@@ -1,11 +1,2 @@
-fastapi
-uvicorn[standard]
-joblib
-pydantic
-pytest
-python-dotenv
 flask
-matplotlib
-seaborn
-gunicorn
-scikit-learn
+joblib

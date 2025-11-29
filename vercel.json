@@ -10,6 +10,16 @@
       "use": "@vercel/static"
     }
   ],
+  "excludeFiles": [
+    "**/.venv/**",
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/notebooks/**",
+    "**/scripts/**",
+    "**/docs/**",
+    "**/models/**",
+    "**/data/**"
+  ],
   "routes": [
     {
       "src": "/static/(.*)",
