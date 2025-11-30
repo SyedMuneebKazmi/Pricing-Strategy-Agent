@@ -6,9 +6,11 @@ from pathlib import Path
 import re
 import csv
 
-# Add the current directory to Python path
+# Add the project root directory to Python path
+# api/index.py -> api/ -> root
 current_dir = Path(__file__).parent
-sys.path.append(str(current_dir))
+project_root = current_dir.parent
+sys.path.append(str(project_root))
 
 # Try to import custom modules, but provide fallbacks
 try:
@@ -33,7 +35,8 @@ except ImportError as e:
         SECRET_KEY = 'dev-key-123'
         DEBUG = False  # Important: Set to False for production
 
-app = Flask(__name__)
+# Initialize Flask with correct template and static folders relative to api/
+app = Flask(__name__, template_folder='../templates', static_folder='../static')
 app.config['SECRET_KEY'] = getattr(Config, 'SECRET_KEY', 'dev-key-123')
 app.config['DEBUG'] = False  # Disable debug mode in production
 
