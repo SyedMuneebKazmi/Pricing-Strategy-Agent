@@ -12,9 +12,9 @@ sys.path.append(str(current_dir))
 
 # Try to import custom modules, but provide fallbacks
 try:
-    from config.config import Config
-    from src.pricing_agent import PricingStrategyAgent
-    print("✅ All imports successful")
+    from src.config import Config
+    # from src.pricing_agent import PricingStrategyAgent
+    print("✅ Config import successful")
 except ImportError as e:
     print(f"❌ Import error: {e}")
     # Fallback configuration
@@ -31,6 +31,23 @@ except ImportError as e:
         DEFAULT_MIN_MARGIN = 0.20
         DEFAULT_MAX_PRICE_MULTIPLIER = 2.5
         SECRET_KEY = 'dev-key-123'
+        DEBUG = False  # Important: Set to False for production
+
+app = Flask(__name__)
+app.config['SECRET_KEY'] = getattr(Config, 'SECRET_KEY', 'dev-key-123')
+app.config['DEBUG'] = False  # Disable debug mode in production
+
+# Global variables for model and processor
+model = None
+data_processor = None
+pricing_agent = None
+app_initialized = False
+
+def clean_number_input(value):
+    """Clean and convert number inputs safely"""
+    if not value or value == '':
+        return 0.0
+    
     value_str = str(value).strip()
     value_str = re.sub(r'[$,]', '', value_str)
     
@@ -43,43 +60,9 @@ def load_model():
     """Load the trained model and data processor"""
     global model, data_processor, pricing_agent, app_initialized
     
-    try:
-        config = Config()
-        
-        # Use absolute paths for Vercel
-        model_path = current_dir / 'models' / 'pricing_model.pkl'
-        processor_path = current_dir / 'models' / 'data_processor.pkl'
-        
-        print(f"🔍 Looking for model at: {model_path}")
-        
-        # Load model
-        if os.path.exists(model_path):
-            model = joblib.load(model_path)
-            print("✅ Model loaded successfully")
-        else:
-            print(f"❌ Model file not found at {model_path}. Using simple pricing agent.")
-            return False
-        
-        # Load data processor (scaler)
-        if os.path.exists(processor_path):
-            data_processor = joblib.load(processor_path)
-            print("✅ Data processor loaded successfully")
-        else:
-            print(f"❌ Data processor not found at {processor_path}. Using simple pricing agent.")
-            return False
-        
-        # Initialize pricing agent
-        pricing_agent = PricingStrategyAgent(model, data_processor, config)
-        print("✅ Pricing Strategy Agent initialized successfully")
-        
-        app_initialized = True
-        return True
-        
-    except Exception as e:
-        print(f"❌ Error loading model: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
+    # Force fallback to SimplePricingAgent for now to avoid Vercel crash
+    print("⚠️ Using simple pricing agent as fallback (forced)")
+    return False
 
 # Simple fallback pricing agent
 class SimplePricingAgent:
@@ -215,22 +198,74 @@ def recommend_price():
         
         # Validate required fields
         if input_data['cost_price'] <= 0:
-    return render_template('404.html'), 404
+            return jsonify({
+                'error': 'Cost price must be greater than 0',
+                'status_code': 'ERROR_VALIDATION'
+            }), 400
+        
+        if input_data['min_margin'] < 0:
+            return jsonify({
+                'error': 'Minimum margin cannot be negative',
+                'status_code': 'ERROR_VALIDATION'
+            }), 400
+        
+        # Set defaults
+        if input_data['max_price'] == 0:
+            input_data['max_price'] = input_data['cost_price'] * 2.5
+        if input_data['competitor_price'] == 0:
+            input_data['competitor_price'] = input_data['cost_price'] * 1.8
+        
+        # Get recommendation
+        recommendation = pricing_agent.find_optimal_price(input_data)
+        
+        return jsonify(recommendation)
+        
+    except Exception as e:
+        return jsonify({
+            'error': f'Unexpected error: {str(e)}',
+            'status_code': 'ERROR_PROCESSING'
+        }), 500
 
-@app.errorhandler(500)
-def internal_error(error):
-    """Handle 500 errors"""
+@app.route('/about')
+def about():
+    """About page"""
+    return render_template('about.html')
+
+@app.route('/health')
+def health_check():
+    """Health check endpoint"""
+    status = 'healthy' if pricing_agent is not None else 'unhealthy'
+    model_loaded = model is not None
+    processor_loaded = data_processor is not None
+    
     return jsonify({
-        'error': 'Internal server error',
-        'status_code': 'ERROR_SERVER'
-    }), 500
+        'status': status,
+        'model_loaded': model_loaded,
+        'processor_loaded': processor_loaded,
+        'agent_type': 'advanced' if model_loaded else 'simple',
+        'app_initialized': app_initialized,
+        'version': '2.0.0',
+        'features': ['smart_pricing', 'demand_analysis', 'profit_optimization']
+    })
 
-# Initialize the app
-print("🚀 Starting Pricing Strategy Agent Application...")
-initialize_app()
-
-# Vercel requires this
-=======
+@app.route('/api/features')
+def feature_info():
+    """API endpoint to get feature information"""
+    features_info = {
+        'demand_levels': [
+            {'value': 'Low', 'description': 'Low market demand'},
+            {'value': 'Medium', 'description': 'Average market demand'},
+            {'value': 'High', 'description': 'High market demand'}
+        ],
+        'seasonality': [
+            {'value': 'Low', 'description': 'Off-season or low season'},
+            {'value': 'Normal', 'description': 'Regular season'},
+            {'value': 'Peak', 'description': 'High season or peak period'}
+        ],
+        'default_values': {
+            'min_margin': 0.2,
+            'max_price_multiplier': 2.5
+        },
         'pricing_strategy': 'AI-powered optimization with business constraints'
     }
     return jsonify(features_info)
@@ -274,6 +309,23 @@ def examples():
     }
     return jsonify(examples_data)
 
->>>>>>> b4d8de4db62ef94b22dd45dde5c02e0a9296bc74
+@app.errorhandler(404)
+def not_found(error):
+    """Handle 404 errors"""
+    return render_template('404.html'), 404
+
+@app.errorhandler(500)
+def internal_error(error):
+    """Handle 500 errors"""
+    return jsonify({
+        'error': 'Internal server error',
+        'status_code': 'ERROR_SERVER'
+    }), 500
+
+# Initialize the app
+print("🚀 Starting Pricing Strategy Agent Application...")
+initialize_app()
+
+# Vercel requires this
 if __name__ == '__main__':
     app.run(debug=False, host='0.0.0.0', port=5000)
